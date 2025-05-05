@@ -9,7 +9,7 @@ from pathlib import Path
 from tqdm import tqdm
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
-from models.detector import CanalMonitorNet
+from models.detector import CanalMonitorNet, HybridCanalMonitorNet
 from utils.data_loader import get_dataloader
 from models.metrics import calculate_iou, calculate_dice_score
 
@@ -43,12 +43,32 @@ def train():
     device = torch.device(config.get('training', {}).get('device', 'cpu'))
     print(f"Using device: {device}")
     
-    # Get number of classes from config
-    num_classes = config['model']['num_classes']
-    print(f"Training with {num_classes} classes")
-    
-    # Initialize model
-    model = CanalMonitorNet(num_classes=num_classes)
+    # Get model configuration
+    model_config = config.get('model', {})
+    num_classes = model_config.get('num_classes', 11)
+    use_hybrid = model_config.get('use_hybrid', False)
+
+    # Initialize the appropriate model
+    if use_hybrid:
+        # Get Roboflow settings
+        roboflow_config = model_config.get('roboflow', {})
+        api_key = roboflow_config.get('api_key', "BATlZ8b1AQuon0tnMKIm")
+        use_during_training = roboflow_config.get('use_during_training', False)
+        
+        print("Using Hybrid Canal Monitor Network with Roboflow water detection")
+        print("Note: This model requires internet connection for API calls")
+        
+        # Initialize hybrid model with the API key
+        model = HybridCanalMonitorNet(num_classes=num_classes, roboflow_api_key=api_key)
+        
+        # Configure whether to use Roboflow during training
+        if not use_during_training:
+            print("Disabling Roboflow during training to avoid API overload")
+            model.enable_roboflow(False)
+    else:
+        print("Using standard Canal Monitor Network")
+        model = CanalMonitorNet(num_classes=num_classes)
+
     model = model.to(device)
     
     # Resume from checkpoint if specified
@@ -167,6 +187,12 @@ def train():
         # Validation phase
         if val_loader:
             model.eval()
+            
+            # For hybrid model, we can optionally enable Roboflow during validation
+            if use_hybrid and model_config.get('roboflow', {}).get('use_during_validation', False):
+                print("Enabling Roboflow enhancement for validation")
+                model.enable_roboflow(True)
+            
             running_val_loss = 0.0
             running_val_iou = 0.0
             running_val_dice = 0.0
@@ -216,6 +242,11 @@ def train():
             
             print(f"Epoch {epoch+1}/{epochs}, Val Loss: {avg_val_loss:.4f}, "
                   f"Val IoU: {avg_val_iou:.4f}, Val Dice: {avg_val_dice:.4f}")
+            
+            # Disable Roboflow after validation if it was enabled for validation only
+            if use_hybrid and model_config.get('roboflow', {}).get('use_during_validation', False):
+                if not model_config.get('roboflow', {}).get('use_during_training', False):
+                    model.enable_roboflow(False)
             
             # Update learning rate scheduler if using
             if scheduler:

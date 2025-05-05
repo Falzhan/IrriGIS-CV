@@ -33,7 +33,7 @@ class CanalPredictor:
             print(f"Detected {self.num_classes} classes in checkpoint")
         else:
             # Fallback to config or default
-            self.num_classes = self.config.get('model', {}).get('num_classes', 12)
+            self.num_classes = self.config.get('model', {}).get('num_classes', 11)
             print(f"Using {self.num_classes} classes from config")
             
         self.model = CanalMonitorNet(num_classes=self.num_classes)
@@ -47,8 +47,7 @@ class CanalPredictor:
             "Silt_Deposit", 
             "Water_Discoloration", 
             "Floating_Debris", 
-            "Vegetation", 
-            "Blockage", 
+            "Vegetation", , 
             "Canal", 
             "Canal_Bank", 
             "Side_Slope"

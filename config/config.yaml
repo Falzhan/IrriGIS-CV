@@ -7,14 +7,26 @@ data:
 
 model:
   name: "deeplabv3_resnet101"
-  num_classes: 12  # 11 categories + background
+  num_classes: 11
   pretrained: true
+  use_hybrid: true
+  roboflow:
+    api_key: "BATlZ8b1AQuon0tnMKIm"
+    enhance_water_surface: true
+
+    use_during_training: false  # Recommended false to limit API calls
+    use_during_validation: true  # Good to enable for validation to see effect
 
 training:
   batch_size: 4
   epochs: 50
   learning_rate: 0.001
   device: "cpu"
+  optimizer: "adam"
+  lr_scheduler: true
+
+  # Optional resume from checkpoint
+  resume_from_checkpoint: ""
 
 metrics:
   water_thresholds: [0.2, 0.4, 0.6, 0.8]
