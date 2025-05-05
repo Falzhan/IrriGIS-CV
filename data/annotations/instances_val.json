@@ -1,0 +1,314 @@
+{
+  "info": {
+    "contributor": "",
+    "date_created": "",
+    "description": "",
+    "url": "",
+    "version": "",
+    "year": ""
+  },
+  "licenses": [
+    {
+      "name": "",
+      "id": 0,
+      "url": ""
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Water_Surface",
+      "supercategory": ""
+    },
+    {
+      "id": 2,
+      "name": "Water_Line",
+      "supercategory": ""
+    },
+    {
+      "id": 3,
+      "name": "Dry_Canal_Bed",
+      "supercategory": ""
+    },
+    {
+      "id": 4,
+      "name": "Silt_Deposit",
+      "supercategory": ""
+    },
+    {
+      "id": 5,
+      "name": "Water_Discoloration",
+      "supercategory": ""
+    },
+    {
+      "id": 6,
+      "name": "Floating_Debris",
+      "supercategory": ""
+    },
+    {
+      "id": 7,
+      "name": "Vegetation",
+      "supercategory": ""
+    },
+    {
+      "id": 8,
+      "name": "Blockage",
+      "supercategory": ""
+    },
+    {
+      "id": 9,
+      "name": "Canal",
+      "supercategory": ""
+    },
+    {
+      "id": 10,
+      "name": "Canal_Bank",
+      "supercategory": ""
+    },
+    {
+      "id": 11,
+      "name": "Side_Slope",
+      "supercategory": ""
+    }
+  ],
+  "images": [
+    {
+      "id": 41,
+      "width": 1024,
+      "height": 768,
+      "file_name": "kanal_banjir_1024x1024.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 42,
+      "width": 447,
+      "height": 234,
+      "file_name": "murky-water-447x234.png",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 43,
+      "width": 1084,
+      "height": 780,
+      "file_name": "newindianexpress_2024-02_36493e6d-b159-40f2-baf6-e13ee8644285_CANSAL.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 44,
+      "width": 800,
+      "height": 534,
+      "file_name": "polluted-black-dirty-wastewater-canal-city-community-bangkok-toxic-water-running-sewers-underground-sewer-dredging-201132385.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 45,
+      "width": 390,
+      "height": 257,
+      "file_name": "polluted-canal-dirty-sewer-urban-260nw-1446068513.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 46,
+      "width": 975,
+      "height": 439,
+      "file_name": "pump+canal+4.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 47,
+      "width": 953,
+      "height": 525,
+      "file_name": "silt-control-blog-banner.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 48,
+      "width": 1089,
+      "height": 1600,
+      "file_name": "stock-photo-soil-and-sediment-runoff-in-u-shape-concrete-canal-after-rainy-season-bench-flume-chute-drop-778819504.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 49,
+      "width": 650,
+      "height": 487,
+      "file_name": "tnm_import_sites_all_var_www_images_canal3-650.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 50,
+      "width": 600,
+      "height": 400,
+      "file_name": "turbidity-tss-tds-turbid-water.jpg",
+      "license": 0,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    }
+  ],
+  "annotations": [
+    {
+      "id": 101,
+      "image_id": 48,
+      "category_id": 3,
+      "segmentation": [
+        [
+          348.26,
+          1494.2,
+          660.57,
+          1506.22,
+          602.91,
+          319.43,
+          521.23,
+          312.22
+        ]
+      ],
+      "area": 234025.0,
+      "bbox": [
+        348.26,
+        312.22,
+        312.31,
+        1194.0
+      ],
+      "iscrowd": 0,
+      "attributes": {
+        "occluded": false
+      }
+    },
+    {
+      "id": 102,
+      "image_id": 48,
+      "category_id": 3,
+      "segmentation": [
+        [
+          535.65,
+          225.74,
+          602.91,
+          228.14,
+          588.5,
+          127.24,
+          540.45,
+          120.03
+        ]
+      ],
+      "area": 5957.0,
+      "bbox": [
+        535.65,
+        120.03,
+        67.26,
+        108.11
+      ],
+      "iscrowd": 0,
+      "attributes": {
+        "occluded": false
+      }
+    },
+    {
+      "id": 103,
+      "image_id": 48,
+      "category_id": 10,
+      "segmentation": [
+        [
+          650.96,
+          108.02,
+          694.2,
+          230.54,
+          876.79,
+          230.54,
+          852.76,
+          314.62,
+          867.18,
+          362.67,
+          631.74,
+          511.62,
+          778.29,
+          1496.61,
+          1080.99,
+          1489.4,
+          1071.38,
+          74.38,
+          643.75,
+          110.42
+        ]
+      ],
+      "area": 497807.0,
+      "bbox": [
+        631.74,
+        74.38,
+        449.25,
+        1422.23
+      ],
+      "iscrowd": 0,
+      "attributes": {
+        "occluded": false
+      }
+    },
+    {
+      "id": 104,
+      "image_id": 48,
+      "category_id": 10,
+      "segmentation": [
+        [
+          494.8,
+          93.6,
+          7.12,
+          79.19,
+          14.32,
+          1465.38,
+          266.58,
+          1503.81,
+          415.53,
+          533.24,
+          187.3,
+          393.9,
+          208.92,
+          309.82,
+          232.94,
+          237.75,
+          429.94,
+          225.74,
+          499.61,
+          108.02
+        ]
+      ],
+      "area": 454771.0,
+      "bbox": [
+        7.12,
+        79.19,
+        492.49,
+        1424.62
+      ],
+      "iscrowd": 0,
+      "attributes": {
+        "occluded": false
+      }
+    }
+  ]
+}

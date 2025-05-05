@@ -1,0 +1,6 @@
+data/raw/
+
+models/*
+!models/*.py
+
+venv/

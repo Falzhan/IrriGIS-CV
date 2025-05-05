@@ -1,0 +1,33 @@
+#04 05 2025 0140
+# Issues in Your Current Training Process
+
+After reviewing your code, I've identified several critical issues that are likely causing your segmentation model to perform poorly:
+
+## 1. Your Dataset Is Using Dummy Masks
+
+In your `CanalDataset` class in data_loader.py, you're creating dummy masks:
+
+```python
+# Create a dummy mask tensor of the same size as the image
+# This is a placeholder - you would normally load your real masks here
+H, W = 224, 224  # Using the same size as the resized image
+mask = torch.zeros((H, W), dtype=torch.long)
+```
+
+This means your model is being trained on all-zero masks (which would create a model that predicts only background)!
+
+## 2. Class Mismatch
+
+Your model was trained with 12 classes, but you're trying to use it with 11 classes in the inference code.
+
+## 3. No Validation During Training
+
+Your training loop doesn't include validation, which makes it hard to know if the model is actually learning.
+
+## 4. Potential Annotation Format Issues
+
+The way you load annotations doesn't actually appear to use any segmentation masks from the annotation file. It only uses the image paths.
+
+## 5. Potential Training Duration Issue
+
+50 epochs might not be enough for a segmentation task, especially if starting from scratch.

@@ -1,0 +1,22 @@
+data:
+  train_path: "data/raw/main"
+  val_path: "data/raw/val"
+  annotations_path: "data/annotations/instances_default.json"
+  val_annotations_path: "data/annotations/instances_val.json"
+  processed_path: "data/processed"
+
+model:
+  name: "deeplabv3_resnet101"
+  num_classes: 12  # 11 categories + background
+  pretrained: true
+
+training:
+  batch_size: 4
+  epochs: 50
+  learning_rate: 0.001
+  device: "cpu"
+
+metrics:
+  water_thresholds: [0.2, 0.4, 0.6, 0.8]
+  silt_thresholds: [0.2, 0.4, 0.6, 0.8]
+  debris_thresholds: [0.2, 0.4, 0.6, 0.8]
