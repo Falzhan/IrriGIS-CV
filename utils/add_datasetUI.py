@@ -1,12 +1,69 @@
-##Bash
-## python add_dataset.py --images "/path/to/new/dataset/images" --annotations "/path/to/new/dataset/annotations.json"
-
-
-
 import json
 import os
 import shutil
 from pathlib import Path
+from tkinter import Tk, filedialog, messagebox
+
+def select_directory(title="Select directory"):
+    """Open a dialog to select a directory"""
+    root = Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    folder_path = filedialog.askdirectory(title=title)
+    root.destroy()
+    return folder_path if folder_path else None
+
+def select_file(title="Select file", filetypes=[("JSON files", "*.json")]):
+    """Open a dialog to select a file"""
+    root = Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    file_path = filedialog.askopenfilename(title=title, filetypes=filetypes)
+    root.destroy()
+    return file_path if file_path else None
+
+def add_dataset_with_gui():
+    """
+    Add a new dataset (images and annotations) to your existing project using GUI dialogs.
+    """
+    print("Please select the folder containing the new images")
+    new_dataset_path = select_directory("Select folder containing new images")
+    if not new_dataset_path:
+        print("No images folder selected. Exiting.")
+        return
+    
+    print("Please select the new annotation file (JSON)")
+    new_annotation_file = select_file("Select annotation file (JSON)")
+    if not new_annotation_file:
+        print("No annotation file selected. Exiting.")
+        return
+    
+    # Set default paths for main directory and annotations file
+    main_dir = os.path.join('data', 'raw', 'main')
+    annotations_file = os.path.join('data', 'annotations', 'instances_default.json')
+    
+    # Confirm with user before proceeding
+    root = Tk()
+    root.withdraw()
+    proceed = messagebox.askyesno(
+        "Confirm", 
+        f"Add dataset from:\nImages: {new_dataset_path}\nAnnotations: {new_annotation_file}\n\n"
+        f"To:\nMain directory: {main_dir}\nAnnotations file: {annotations_file}\n\nProceed?"
+    )
+    root.destroy()
+    
+    if not proceed:
+        print("Operation cancelled by user.")
+        return
+    
+    # Call the main add_dataset function
+    add_dataset(
+        new_dataset_path,
+        new_annotation_file,
+        main_dir,
+        annotations_file,
+        update_splits=True
+    )
 
 def add_dataset(
     new_dataset_path,
@@ -16,14 +73,7 @@ def add_dataset(
     update_splits=True
 ):
     """
-    Add a new dataset (images and annotations) to your existing project.
-    
-    Args:
-        new_dataset_path (str): Path to the folder containing new images
-        new_annotation_file (str): Path to the new annotation file (COCO format)
-        main_dir (str): Main directory for all images in your project
-        annotations_file (str): Path to your main annotation file
-        update_splits (bool): Whether to update train/val splits after merging
+    (The original add_dataset function remains unchanged)
     """
     print(f"Adding new dataset from {new_dataset_path} with annotations {new_annotation_file}")
     
@@ -51,14 +101,8 @@ def add_dataset(
         print(f"Loaded new annotations with {len(new_data['images'])} images")
     
     # Find maximum IDs in existing data to ensure uniqueness
-    max_image_id = 0
-    max_annotation_id = 0
-    
-    if existing_data['images']:
-        max_image_id = max(img['id'] for img in existing_data['images'])
-    
-    if existing_data['annotations']:
-        max_annotation_id = max(ann['id'] for ann in existing_data['annotations'])
+    max_image_id = max((img['id'] for img in existing_data['images']), default=0)
+    max_annotation_id = max((ann['id'] for ann in existing_data['annotations']), default=0)
     
     print(f"Maximum existing image ID: {max_image_id}")
     print(f"Maximum existing annotation ID: {max_annotation_id}")
@@ -76,7 +120,7 @@ def add_dataset(
                 category_mapping[new_cat['id']] = existing_categories[new_cat['name']]
             else:
                 # Add new category with an incremented ID
-                new_id = max(existing_categories.values()) + 1
+                new_id = max(existing_categories.values(), default=0) + 1
                 existing_data['categories'].append({
                     'id': new_id, 
                     'name': new_cat['name']
@@ -155,29 +199,4 @@ def add_dataset(
     print("Dataset addition complete!")
 
 if __name__ == '__main__':
-    # Example usage:
-    # add_dataset('path/to/new/dataset', 'path/to/new/annotations.json')
-    
-    # Comment out the line below and replace with your actual paths
-    # add_dataset('new_data/images', 'new_data/annotations.json')
-    
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Add a new dataset to your project')
-    parser.add_argument('--images', required=True, help='Path to folder containing new images')
-    parser.add_argument('--annotations', required=True, help='Path to new annotation file')
-    parser.add_argument('--main-dir', default='data/raw/main', help='Main directory for all images')
-    parser.add_argument('--annotations-file', default='data/annotations/instances_default.json', 
-                        help='Path to main annotation file')
-    parser.add_argument('--no-update-splits', action='store_false', dest='update_splits',
-                        help='Do not update train/val splits after merging')
-    
-    args = parser.parse_args()
-    
-    add_dataset(
-        args.images, 
-        args.annotations, 
-        args.main_dir, 
-        args.annotations_file,
-        args.update_splits
-    )
+    add_dataset_with_gui()
