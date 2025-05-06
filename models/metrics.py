@@ -81,48 +81,114 @@ def calculate_levels(mask, num_classes):
     """
     Calculate water, silt, and debris levels based on segmentation mask.
     
-    Args:
-        mask: Tensor of segmentation mask
-        num_classes: Number of classes in the model
-        
-    Returns:
-        Dictionary with water, silt, and debris levels
+    Water Level: 1-Dry, 2-Low, 3-Normal, 4-High, 5-Overflow
+    Silt Level: 2-Light, 3-Normal, 4-Dirty, 5-Heavily Silted (No level 1)
+    Debris Level: 2-Light, 3-Normal, 4-Heavy, 5-Blocked (No level 1)
+    
+    Default all levels to "Normal" (3) if no indicators present.
     """
-    # Convert tensor to numpy if needed
     if isinstance(mask, torch.Tensor):
         mask = mask.cpu().numpy()
     
-    # Total pixels
     total_pixels = mask.size
     
-    # Class indices for different conditions
-    # These should be adjusted based on your specific classes
-    water_classes = [1]  # Assuming Water_Surface is class 1
-    silt_classes = [4]   # Assuming Silt_Deposit is class 4
-    debris_classes = [6] # Assuming Floating_Debris is class 6
+    # Class indices
+    water_surface_idx = 2  # Water_Surface
+    canal_bank_idx = 7     # Canal_Bank
+    side_slope_idx = 3     # Side_Slope
+    dry_canal_idx = 9      # Dry_Canal_Bed
+    silt_deposit_idx = 6   # Silt_Deposit
+    vegetation_idx = 8     # Vegetation
+    water_discolor_idx = 5 # Water_Discoloration
+    floating_debris_idx = 4 # Floating_Debris (fixed index from 7 to an appropriate value)
     
-    # Count pixels of each condition
-    water_pixels = np.sum(np.isin(mask, water_classes))
-    silt_pixels = np.sum(np.isin(mask, silt_classes))
-    debris_pixels = np.sum(np.isin(mask, debris_classes))
+    # Calculate pixel counts
+    water_surface = np.sum(mask == water_surface_idx)
+    canal_bank = np.sum(mask == canal_bank_idx)
+    side_slope = np.sum(mask == side_slope_idx)
+    dry_canal = np.sum(mask == dry_canal_idx)
+    silt_deposit = np.sum(mask == silt_deposit_idx)
+    vegetation = np.sum(mask == vegetation_idx)
+    water_discolor = np.sum(mask == water_discolor_idx)
+    floating_debris = np.sum(mask == floating_debris_idx)
     
-    # Calculate percentages
-    water_percent = (water_pixels / total_pixels) * 100 if total_pixels > 0 else 0
-    silt_percent = (silt_pixels / total_pixels) * 100 if total_pixels > 0 else 0
-    debris_percent = (debris_pixels / total_pixels) * 100 if total_pixels > 0 else 0
+    # Calculate percentages for reporting
+    water_percent = (water_surface / total_pixels) * 100 if total_pixels > 0 else 0
     
-    # Convert to levels (0-5 scale)
-    water_level = min(5.0, (water_percent / 20))
-    silt_level = min(5.0, (silt_percent / 20))
-    debris_level = min(5.0, (debris_percent / 20))
+    # ----- WATER LEVEL CALCULATION (1-5) -----
+    # Default to Normal
+    water_level = 3
+    
+    # Check for dry canal first
+    if dry_canal > 0:
+        water_level = 1  # Dry
+    else:
+        # Calculate bank/slope areas for comparison
+        bank_slope_area = canal_bank + side_slope
+        
+        if bank_slope_area > 0:
+            # Calculate the ratio of water to bank+slope
+            water_ratio = water_surface / bank_slope_area
+            
+            # Determine water level based on the ratio
+            if water_surface == 0:
+                water_level = 1  # Dry if no water detected
+            elif water_ratio < 0.15:
+                water_level = 2  # Low
+            elif water_ratio < 0.40:
+                water_level = 3  # Normal
+            elif water_ratio < 0.70:
+                water_level = 4  # High
+            else:
+                water_level = 5  # Overflow
+    
+    # ----- SILT LEVEL CALCULATION (2-5) -----
+    # Default to Normal
+    silt_level = 3
+    
+    # Consider multiple sources as indicators for silt
+    veg_as_silt = vegetation * 0.3  # 30% of vegetation considered as silt indicator
+    silt_total = silt_deposit + veg_as_silt + water_discolor
+    silt_percent = (silt_total / total_pixels) * 100 if total_pixels > 0 else 0
+    
+    if silt_total > 0:
+        silt_ratio = silt_total / total_pixels
+        if silt_ratio < 0.05:
+            silt_level = 2  # Light
+        elif silt_ratio < 0.15:
+            silt_level = 3  # Normal
+        elif silt_ratio < 0.30:
+            silt_level = 4  # Dirty
+        else:
+            silt_level = 5  # Heavily Silted
+    
+    # ----- DEBRIS LEVEL CALCULATION (2-5) -----
+    # Default to Normal
+    debris_level = 3
+    
+    # Consider floating debris and part of vegetation as debris
+    veg_as_debris = vegetation * 0.7  # 70% of vegetation considered as debris indicator
+    debris_total = floating_debris + veg_as_debris
+    debris_percent = (debris_total / total_pixels) * 100 if total_pixels > 0 else 0
+    
+    if debris_total > 0:
+        debris_ratio = debris_total / total_pixels
+        if debris_ratio < 0.05:
+            debris_level = 2  # Light
+        elif debris_ratio < 0.15:
+            debris_level = 3  # Normal
+        elif debris_ratio < 0.30:
+            debris_level = 4  # Heavy
+        else:
+            debris_level = 5  # Blocked
     
     return {
-        'water_level': water_level,
-        'water_percentage': water_percent,
-        'silt_level': silt_level,
-        'silt_percentage': silt_percent,
-        'debris_level': debris_level,
-        'debris_percentage': debris_percent
+        'water_level': int(water_level),
+        'water_percentage': round(water_percent),
+        'silt_level': int(silt_level),
+        'silt_percentage': round(silt_percent),
+        'debris_level': int(debris_level),
+        'debris_percentage': round(debris_percent)
     }
 
 def calculate_class_weights(dataset):
