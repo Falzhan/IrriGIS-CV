@@ -45,7 +45,7 @@ def train():
     
     # Get model configuration
     model_config = config.get('model', {})
-    num_classes = model_config.get('num_classes', 11)
+    num_classes = model_config.get('num_classes', 10)
     use_hybrid = model_config.get('use_hybrid', False)
 
     # Initialize the appropriate model
@@ -131,7 +131,6 @@ def train():
             mode='min', 
             factor=0.5, 
             patience=5, 
-            verbose=True
         )
     
     # Initialize metrics tracking

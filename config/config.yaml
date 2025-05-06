@@ -7,9 +7,9 @@ data:
 
 model:
   name: "deeplabv3_resnet101"
-  num_classes: 11
+  num_classes: 10
   pretrained: true
-  use_hybrid: true
+  use_hybrid: false
   roboflow:
     api_key: "BATlZ8b1AQuon0tnMKIm"
     enhance_water_surface: true

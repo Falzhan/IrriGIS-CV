@@ -90,7 +90,7 @@ def add_dataset(
         existing_data = {
             'info': {'description': 'Canal Monitoring Dataset'},
             'licenses': [],
-            'categories': [{'id': 1, 'name': 'canal'}],
+            'categories': [],
             'images': [],
             'annotations': []
         }

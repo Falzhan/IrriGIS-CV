@@ -21,6 +21,7 @@ class CanalPredictor:
         
         # Analyze checkpoint to determine the number of classes
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        
         # Look for the classifier layer to determine number of classes
         classifier_weights = None
         for key, value in checkpoint['model_state_dict'].items():
@@ -33,7 +34,7 @@ class CanalPredictor:
             print(f"Detected {self.num_classes} classes in checkpoint")
         else:
             # Fallback to config or default
-            self.num_classes = self.config.get('model', {}).get('num_classes', 11)
+            self.num_classes = self.config.get('model', {}).get('num_classes', 10)
             print(f"Using {self.num_classes} classes from config")
             
         self.model = CanalMonitorNet(num_classes=self.num_classes)
@@ -47,8 +48,7 @@ class CanalPredictor:
             "Silt_Deposit", 
             "Water_Discoloration", 
             "Floating_Debris", 
-            "Vegetation", , 
-            "Canal", 
+            "Vegetation",
             "Canal_Bank", 
             "Side_Slope"
         ]
@@ -61,8 +61,41 @@ class CanalPredictor:
         # Load checkpoint
         print(f"Loading checkpoint from {checkpoint_path}")
         try:
-            self.model.load_state_dict(checkpoint['model_state_dict'])
-            print(f"Model loaded successfully (trained for {checkpoint['epoch']+1} epochs)")
+            # First, analyze the checkpoint keys
+            checkpoint_keys = list(checkpoint['model_state_dict'].keys())
+            model_keys = list(self.model.state_dict().keys())
+            
+            print(f"Checkpoint has {len(checkpoint_keys)} keys")
+            print(f"Model has {len(model_keys)} keys")
+            
+            # Check for "module." prefix (common when training with DataParallel)
+            has_module_prefix = any(k.startswith('module.') for k in checkpoint_keys)
+            
+            # Create a new state dict with matching keys
+            new_state_dict = {}
+            missing_keys = []
+            
+            if has_module_prefix:
+                print("Detected 'module.' prefix in checkpoint, removing prefix")
+                # Remove 'module.' prefix
+                for k, v in checkpoint['model_state_dict'].items():
+                    new_key = k[7:] if k.startswith('module.') else k
+                    new_state_dict[new_key] = v
+            else:
+                new_state_dict = checkpoint['model_state_dict']
+            
+            # Check if we need to modify the model keys or checkpoint keys
+            if not any(k.startswith('deeplab.') for k in new_state_dict.keys()) and any(k.startswith('deeplab.') for k in model_keys):
+                print("Model expects 'deeplab.' prefix but checkpoint doesn't have it. Using strict=False to load partial state")
+                # Use strict=False to load whatever matches
+                self.model.load_state_dict(new_state_dict, strict=False)
+            else:
+                # Try to load with strict=False as a fallback
+                self.model.load_state_dict(new_state_dict, strict=False)
+            
+            print(f"Model loaded successfully (trained for {checkpoint.get('epoch', 'unknown')+1} epochs)")
+            print("Note: Some keys from the checkpoint may not have been loaded due to architecture mismatch")
+            
         except Exception as e:
             print(f"Error loading checkpoint: {e}")
             raise
@@ -263,6 +296,7 @@ def analyze_checkpoint(checkpoint_path):
             
             # Print model structure summary
             print(f"Total layers: {len(model_dict.keys())}")
+            print(f"First 5 keys: {list(model_dict.keys())[:5]}")
             
         if 'optimizer_state_dict' in checkpoint:
             print("Optimizer state is present in the checkpoint")
@@ -273,13 +307,61 @@ def analyze_checkpoint(checkpoint_path):
     except Exception as e:
         print(f"Error analyzing checkpoint: {e}")
 
+def inspect_model_architecture(checkpoint_path):
+    """Print detailed information about the model architecture from checkpoint"""
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        if 'model_state_dict' in checkpoint:
+            model_dict = checkpoint['model_state_dict']
+            
+            print("\nDetailed Model Architecture Analysis:")
+            # Get all keys and organize them
+            all_keys = list(model_dict.keys())
+            
+            # Check for module prefix (DataParallel)
+            has_module_prefix = any(k.startswith('module.') for k in all_keys)
+            if has_module_prefix:
+                print("Model was trained with DataParallel (has 'module.' prefix)")
+            
+            # Group keys by major components
+            components = {}
+            for key in all_keys:
+                # Remove module prefix if exists
+                clean_key = key[7:] if has_module_prefix and key.startswith('module.') else key
+                
+                # Get first part of key (up to first dot)
+                parts = clean_key.split('.')
+                major_component = parts[0]
+                
+                if major_component not in components:
+                    components[major_component] = []
+                components[major_component].append(key)
+            
+            # Print component summary
+            print("\nModel Components:")
+            for comp_name, keys in components.items():
+                print(f"- {comp_name}: {len(keys)} parameters")
+            
+            # Print sample keys from each component
+            print("\nSample Keys from Each Component:")
+            for comp_name, keys in components.items():
+                print(f"\n{comp_name} (showing first 3):")
+                for k in keys[:3]:
+                    print(f"  {k}: {model_dict[k].shape}")
+                    
+    except Exception as e:
+        print(f"Error inspecting model architecture: {e}")
+
 if __name__ == '__main__':
-    checkpoint_path = 'models/checkpoints_20250504_023838/final_model.pth'
-##    checkpoint_path = 'models/checkpoint_epoch_50.pth'
+    checkpoint_path = 'models/checkpoints_20250506_112241/best_model.pth'
     
     # First analyze the checkpoint
     print("Analyzing checkpoint...")
     analyze_checkpoint(checkpoint_path)
+    
+    # Get more detailed information about the model architecture
+    print("\nInspecting model architecture...")
+    inspect_model_architecture(checkpoint_path)
     
     # Initialize predictor with checkpoint
     predictor = CanalPredictor(
@@ -287,11 +369,9 @@ if __name__ == '__main__':
     )
     
     # Process a single image
-    image_path = 'data/raw/train/665a96ccb8993.image.jpg'  # Replace with your image path
+    image_path = 'data/raw/train/f169b140-6566-11ef-9851-c5606b77a2fd.jpg'  
     result = predictor.predict(image_path)
     predictor.visualize(result)
     
     # Uncomment to process all images in a directory
     # batch_predict(predictor, 'data/raw/val', 'results')
-
-    ## python inference.py
