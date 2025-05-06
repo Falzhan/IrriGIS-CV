@@ -143,7 +143,7 @@ def calculate_levels(mask, num_classes):
                 water_level = 5  # Overflow
     
     # ----- SILT LEVEL CALCULATION (2-5) -----
-    # Default to Normal
+    # Default to Normal (3)
     silt_level = 3
     
     # Consider multiple sources as indicators for silt
@@ -151,19 +151,21 @@ def calculate_levels(mask, num_classes):
     silt_total = silt_deposit + veg_as_silt + water_discolor
     silt_percent = (silt_total / total_pixels) * 100 if total_pixels > 0 else 0
     
-    if silt_total > 0:
+    # If no silt indicators are present, keep as Normal (3)
+    # If silt is present, determine the level based on ratio
+    if silt_total == 0:
+        silt_level = 3  # Normal - when there's none
+    else:
         silt_ratio = silt_total / total_pixels
-        if silt_ratio < 0.05:
-            silt_level = 2  # Light
-        elif silt_ratio < 0.15:
-            silt_level = 3  # Normal
-        elif silt_ratio < 0.30:
-            silt_level = 4  # Dirty
+        if silt_ratio < 0.10:
+            silt_level = 2  # Light - when there's little
+        elif silt_ratio < 0.25:
+            silt_level = 4  # Dirty - when there's many
         else:
-            silt_level = 5  # Heavily Silted
+            silt_level = 5  # Heavily Silted - when there's too many
     
     # ----- DEBRIS LEVEL CALCULATION (2-5) -----
-    # Default to Normal
+    # Default to Normal (3)
     debris_level = 3
     
     # Consider floating debris and part of vegetation as debris
@@ -171,16 +173,18 @@ def calculate_levels(mask, num_classes):
     debris_total = floating_debris + veg_as_debris
     debris_percent = (debris_total / total_pixels) * 100 if total_pixels > 0 else 0
     
-    if debris_total > 0:
+    # If no debris indicators are present, keep as Normal (3)
+    # If debris is present, determine the level based on ratio
+    if debris_total == 0:
+        debris_level = 3  # Normal - when there's none
+    else:
         debris_ratio = debris_total / total_pixels
-        if debris_ratio < 0.05:
-            debris_level = 2  # Light
-        elif debris_ratio < 0.15:
-            debris_level = 3  # Normal
-        elif debris_ratio < 0.30:
-            debris_level = 4  # Heavy
+        if debris_ratio < 0.10:
+            debris_level = 2  # Light - when there's little
+        elif debris_ratio < 0.25:
+            debris_level = 4  # Heavy - when there's many
         else:
-            debris_level = 5  # Blocked
+            debris_level = 5  # Blocked - when there's too many
     
     return {
         'water_level': int(water_level),

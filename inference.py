@@ -3,6 +3,8 @@ import yaml
 from pathlib import Path
 import os
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+import matplotlib.patches as patches
 import numpy as np
 from PIL import Image
 from torchvision import transforms
@@ -182,44 +184,132 @@ class CanalPredictor:
             'original_image': original_image
         }
     
-    def visualize(self, result, save_path=None):
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7))
+    def _get_level_description(self, level_type, value):
+        """
+        Get descriptive text for level values based on the new metrics.
+        
+        Args:
+            level_type: Type of level ('water', 'silt', or 'debris')
+            value: Numeric level value
+            
+        Returns:
+            String description of the level
+        """
+        # Updated descriptions based on new metrics
+        water_desc = {
+            1: 'Dry',
+            2: 'Low',
+            3: 'Normal',
+            4: 'High',
+            5: 'Overflow'
+        }
+        
+        silt_desc = {
+            2: 'Light',
+            3: 'Normal',
+            4: 'Dirty',
+            5: 'Heavily Silted'
+        }
+        
+        debris_desc = {
+            2: 'Light',
+            3: 'Normal',
+            4: 'Heavy',
+            5: 'Blocked'
+        }
+        
+        # Get the appropriate description based on level type
+        if level_type == 'water':
+            return water_desc.get(value, 'Normal')
+        elif level_type == 'silt':
+            return silt_desc.get(value, 'Normal')
+        else:  # debris
+            return debris_desc.get(value, 'Normal')
+            
+    def _get_level_color(self, level_type, value):
+        """
+        Get color for visualization based on level value.
+        
+        Args:
+            level_type: Type of level ('water', 'silt', or 'debris')
+            value: Numeric level value
+            
+        Returns:
+            RGB color tuple for visualization
+        """
+        # Define colors for different levels
+        # Format: (R, G, B) where each value is between 0 and 1
+        
+        # Water level colors: blue scale (dry to overflow)
+        water_colors = {
+            1: (0.9, 0.9, 0.9),  # Light gray for dry
+            2: (0.7, 0.7, 1.0),  # Light blue for low
+            3: (0.0, 0.5, 1.0),  # Medium blue for normal
+            4: (0.0, 0.0, 0.8),  # Deep blue for high
+            5: (0.5, 0.0, 0.5)   # Purple for overflow
+        }
+        
+        # Silt level colors: brown scale (light to heavily silted)
+        silt_colors = {
+            2: (0.9, 0.8, 0.6),  # Light tan for light
+            3: (0.8, 0.7, 0.5),  # Medium tan for normal
+            4: (0.6, 0.5, 0.4),  # Dark tan for dirty
+            5: (0.4, 0.3, 0.1)   # Brown for heavily silted
+        }
+        
+        # Debris level colors: green to red scale (light to blocked)
+        debris_colors = {
+            2: (0.7, 1.0, 0.7),  # Light green for light
+            3: (1.0, 1.0, 0.5),  # Yellow for normal
+            4: (1.0, 0.6, 0.4),  # Orange for heavy
+            5: (0.8, 0.2, 0.2)   # Red for blocked
+        }
+        
+        # Return appropriate color based on level type
+        if level_type == 'water':
+            return water_colors.get(value, water_colors[3])  # Default to normal
+        elif level_type == 'silt':
+            return silt_colors.get(value, silt_colors[3])    # Default to normal
+        else:  # debris
+            return debris_colors.get(value, debris_colors[3])  # Default to normal
+
+    def visualize(self, result, save_path=None, enhance_water_line=True):
+        """
+        Visualize segmentation results with simplified metrics display.
+        
+        Args:
+            result: Dictionary containing segmentation results
+            save_path: Path to save the visualization
+            enhance_water_line: Whether to enhance water line visualization
+        """
+        # Create a figure with 2 rows, 2 columns
+        fig = plt.figure(figsize=(16, 12))
+        gs = gridspec.GridSpec(2, 2, width_ratios=[1, 1], height_ratios=[3, 1])
         
         # Plot original image
-        ax1.imshow(result['original_image'])
-        ax1.set_title('Original Image')
-        ax1.axis('off')
+        ax_orig = plt.subplot(gs[0, 0])
+        ax_orig.imshow(result['original_image'])
+        ax_orig.set_title('Original Image', fontsize=14)
+        ax_orig.axis('off')
         
         # Create a colormap for the mask with distinct colors for each category
-        # Generate a colormap with distinct colors for each class
         colors = plt.cm.tab20(np.linspace(0, 1, self.num_classes))
         cmap = plt.cm.colors.ListedColormap(colors)
         
         # Plot segmentation mask
-        im = ax2.imshow(result['mask'], cmap=cmap, vmin=0, vmax=self.num_classes-1)
-        ax2.set_title('Segmentation Mask')
-        ax2.axis('off')
+        ax_mask = plt.subplot(gs[0, 1])
+        im = ax_mask.imshow(result['mask'], cmap=cmap, vmin=0, vmax=self.num_classes-1)
+        ax_mask.set_title('Segmentation Mask', fontsize=14)
+        ax_mask.axis('off')
         
         # Add colorbar with category names
-        cbar = plt.colorbar(im, ax=ax2, ticks=np.arange(min(self.num_classes, len(self.category_names))))
-        # Only use as many category names as we have classes (up to the length of category_names)
+        cbar_ax = fig.add_axes([0.93, 0.55, 0.02, 0.3])
+        cbar = plt.colorbar(im, cax=cbar_ax, ticks=np.arange(min(self.num_classes, len(self.category_names))))
         display_categories = self.category_names[:self.num_classes]
         cbar.set_ticklabels(display_categories)
         
-        # Add levels information
-        levels = result['levels']
-        if levels:
-            info_text = (
-                f"Water Level: {levels['water_level']:.1f}/5.0 ({levels['water_percentage']:.1f}%)\n"
-                f"Silt Level: {levels['silt_level']:.1f}/5.0 ({levels['silt_percentage']:.1f}%)\n"
-                f"Debris Level: {levels['debris_level']:.1f}/5.0 ({levels['debris_percentage']:.1f}%)"
-            )
-            
-            plt.figtext(0.02, 0.02, info_text, 
-                      bbox=dict(facecolor='white', alpha=0.8))
-        
-        # Add histogram to show distribution of classes
-        ax_hist = fig.add_axes([0.92, 0.1, 0.03, 0.8])
+        # Create histogram of class distribution
+        ax_hist = plt.subplot(gs[1, 1])
         unique, counts = np.unique(result['mask'], return_counts=True)
         
         # Create a dictionary mapping class indices to counts
@@ -229,19 +319,60 @@ class CanalPredictor:
                 class_counts[idx] = count
         
         # Convert to array for plotting
+        indices = np.arange(self.num_classes)
         count_data = np.zeros(self.num_classes)
         for idx, count in class_counts.items():
             count_data[idx] = count
+        
+        # Plot horizontal bars for class distribution    
+        bars = ax_hist.barh(indices, count_data, color=colors)
+        ax_hist.set_yticks(indices)
+        ax_hist.set_yticklabels(display_categories, fontsize=8)
+        ax_hist.set_title('Class Distribution (Pixel Count)', fontsize=12)
+        
+        # Add text labels with pixel counts
+        for i, v in enumerate(count_data):
+            if v > 0:  # Only show labels for classes that are present
+                percentage = (v / np.sum(count_data)) * 100
+                ax_hist.text(v + 0.1 * np.max(count_data), i, f"{int(v)} ({percentage:.1f}%)", 
+                            va='center', fontsize=8)
+        
+        # Create metrics visualization as a simple table
+        ax_metrics = plt.subplot(gs[1, 0])
+        ax_metrics.axis('off')
+        
+        # Get levels information
+        levels = result.get('levels', {})
+        
+        if levels:
+            # Create a simple table for metrics
+            metrics_data = [
+                ["Water Level", f"{levels.get('water_level', 0):.1f}/5", f"{levels.get('water_percentage', 0):.1f}%"],
+                ["Silt Level", f"{levels.get('silt_level', 0):.1f}/5", f"{levels.get('silt_percentage', 0):.1f}%"],
+                ["Debris Level", f"{levels.get('debris_level', 0):.1f}/5", f"{levels.get('debris_percentage', 0):.1f}%"]
+            ]
             
-        ax_hist.barh(np.arange(self.num_classes), count_data, color=colors)
-        ax_hist.set_yticks(np.arange(self.num_classes))
-        ax_hist.set_yticklabels([])
-        ax_hist.set_title('Pixel Count')
+            # Create table
+            table = ax_metrics.table(
+                cellText=metrics_data,
+                colLabels=["Metric", "Level", "Percentage"],
+                loc='center',
+                cellLoc='center',
+                colWidths=[0.3, 0.2, 0.2]
+            )
+            
+            # Style the table
+            table.auto_set_font_size(False)
+            table.set_fontsize(14)
+            table.scale(1, 2)  # Make cells taller
+            
+            # Add title
+            ax_metrics.set_title('Canal Condition Metrics', fontsize=16, pad=20)
         
         plt.tight_layout()
         
         if save_path:
-            plt.savefig(save_path, bbox_inches='tight')
+            plt.savefig(save_path, bbox_inches='tight', dpi=150)
             print(f"Visualization saved to {save_path}")
         
         plt.show()
@@ -369,7 +500,7 @@ if __name__ == '__main__':
     )
     
     # Process a single image
-    image_path = 'data/raw/train/f169b140-6566-11ef-9851-c5606b77a2fd.jpg'  
+    image_path = 'data/raw/train/image5.jpg'  
     result = predictor.predict(image_path)
     predictor.visualize(result)
     

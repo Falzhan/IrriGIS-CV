@@ -1,0 +1,40 @@
+data:
+  annotations_path: data/annotations/instances_default.json
+  processed_path: data/processed
+  train_path: data/raw/main
+  val_annotations_path: data/annotations/instances_val.json
+  val_path: data/raw/val
+metrics:
+  debris_thresholds:
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.8
+  silt_thresholds:
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.8
+  water_thresholds:
+  - 0.2
+  - 0.4
+  - 0.6
+  - 0.8
+model:
+  name: deeplabv3_resnet152
+  num_classes: 10
+  pretrained: true
+  roboflow:
+    api_key: BATlZ8b1AQuon0tnMKIm
+    enhance_water_surface: true
+    use_during_training: false
+    use_during_validation: true
+  use_hybrid: false
+training:
+  batch_size: 4
+  device: cpu
+  epochs: 50
+  learning_rate: 0.001
+  lr_scheduler: true
+  optimizer: adam
+  resume_from_checkpoint: ''
