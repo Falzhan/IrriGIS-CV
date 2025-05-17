@@ -10,9 +10,22 @@ from PIL import Image
 from torchvision import transforms
 from models.detector import CanalMonitorNet
 from models.metrics import calculate_levels
+from utils.descriptor import CanalDescriptor
 
 class CanalPredictor:
-    def __init__(self, checkpoint_path, config_path='config/config.yaml'):
+    def __init__(self, checkpoint_path, config_path='config/config.yaml', max_percentage=50):
+        """
+        Initialize the Canal Predictor.
+        
+        Args:
+            checkpoint_path: Path to the model checkpoint
+            config_path: Path to the configuration file
+            max_percentage: The percentage threshold for maximum level (5) rating (default 50%)
+        """
+        # Store the max percentage threshold for ratings
+        self.max_percentage = max_percentage
+        print(f"Using {self.max_percentage}% as threshold for maximum level ratings")
+        
         # Load config
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
@@ -110,10 +123,78 @@ class CanalPredictor:
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], 
-                              std=[0.229, 0.224, 0.225])
+                               std=[0.229, 0.224, 0.225])
         ])
+        
+        self.descriptor = CanalDescriptor()
+    
+    def percentage_to_level(self, percentage, level_type):
+        """
+        Convert percentage to level rating based on the lenient scale and type.
+        
+        Args:
+            percentage: Percentage value (0-100)
+            level_type: 'water', 'silt', or 'debris'
+            
+        Returns:
+            Integer level rating from 1-5
+        """
+        # Scale percentage relative to max_percentage threshold
+        scaled_percentage = (percentage / self.max_percentage) * 100
+        
+        # Handle zero or very low percentages specially
+        if percentage < 1.0:
+            if level_type == 'water':
+                return 1  # Dry
+            elif level_type in ['silt', 'debris']:
+                return 3  # Normal (no sediment/obstruction)
+        
+        # Different thresholds per level type
+        if level_type == 'water':
+            # Water level: 1-Dry, 2-Low, 3-Normal, 4-High, 5-Overflow
+            if scaled_percentage < 5:
+                return 1  # Dry
+            elif scaled_percentage < 25:
+                return 2  # Low
+            elif scaled_percentage < 60:
+                return 3  # Normal
+            elif scaled_percentage < 90:
+                return 4  # High
+            else:
+                return 5  # Overflow
+        
+        elif level_type == 'silt':
+            # Silt level: 1-Cleaning, 2-Light, 3-Normal, 4-Dirty, 5-Heavily Silted
+            if percentage < 1:
+                return 3  # Normal (no sediment)
+            elif scaled_percentage < 25:
+                return 2  # Light
+            elif scaled_percentage < 60:
+                return 4  # Dirty
+            else:
+                return 5  # Heavily Silted
+        
+        else:  # debris
+            # Debris level: 1-Clearing, 2-Light, 3-Normal, 4-Heavy, 5-Blocked
+            if percentage < 1:
+                return 3  # Normal (no obstruction)
+            elif scaled_percentage < 25:
+                return 2  # Light
+            elif scaled_percentage < 60:
+                return 4  # Heavy
+            else:
+                return 5  # Blocked
     
     def predict(self, image_path):
+        """
+        Predict canal conditions from an image.
+        
+        Args:
+            image_path: Path to the input image
+            
+        Returns:
+            Dictionary with results
+        """
         # Check if image exists
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image not found: {image_path}")
@@ -134,18 +215,7 @@ class CanalPredictor:
         unique_classes = np.unique(mask)
         print(f"Unique classes in prediction: {unique_classes}")
         
-        # Calculate condition levels (simplified for now)
-        levels = {
-            'water_level': 0,
-            'water_percentage': 0,
-            'silt_level': 0,
-            'silt_percentage': 0,
-            'debris_level': 0,
-            'debris_percentage': 0
-        }
-        
-        # Very simple calculation based on pixel counts
-        # You'll want to replace this with your more sophisticated calculate_levels function
+        # Calculate condition levels
         total_pixels = mask.size
         
         # Map class indices to condition categories
@@ -163,20 +233,29 @@ class CanalPredictor:
         silt_percent = (silt_pixels / total_pixels) * 100 if total_pixels > 0 else 0
         debris_percent = (debris_pixels / total_pixels) * 100 if total_pixels > 0 else 0
         
-        # Convert to levels (0-5 scale)
-        levels['water_percentage'] = water_percent
-        levels['water_level'] = min(5.0, (water_percent / 20))
+        # Convert to levels based on new rating system
+        water_level = self.percentage_to_level(water_percent, 'water')
+        silt_level = self.percentage_to_level(silt_percent, 'silt')
+        debris_level = self.percentage_to_level(debris_percent, 'debris')
         
-        levels['silt_percentage'] = silt_percent
-        levels['silt_level'] = min(5.0, (silt_percent / 20))
+        levels = {
+            'water_percentage': water_percent,
+            'water_level': water_level,
+            'silt_percentage': silt_percent,
+            'silt_level': silt_level,
+            'debris_percentage': debris_percent,
+            'debris_level': debris_level
+        }
         
-        levels['debris_percentage'] = debris_percent
-        levels['debris_level'] = min(5.0, (debris_percent / 20))
+        # Get descriptions for each level
+        water_desc = self._get_level_description('water', water_level)
+        silt_desc = self._get_level_description('silt', silt_level)
+        debris_desc = self._get_level_description('debris', debris_level)
         
         print(f"Prediction for {os.path.basename(image_path)}:")
-        print(f"  Water level: {levels['water_level']:.2f}/5.00 ({levels['water_percentage']:.1f}%)")
-        print(f"  Silt level: {levels['silt_level']:.2f}/5.00 ({levels['silt_percentage']:.1f}%)")
-        print(f"  Debris level: {levels['debris_level']:.2f}/5.00 ({levels['debris_percentage']:.1f}%)")
+        print(f"  Water level: {water_level}/5 ({water_percent:.1f}%) - {water_desc}")
+        print(f"  Silt level: {silt_level}/5 ({silt_percent:.1f}%) - {silt_desc}")
+        print(f"  Debris level: {debris_level}/5 ({debris_percent:.1f}%) - {debris_desc}")
         
         return {
             'mask': mask,
@@ -186,16 +265,16 @@ class CanalPredictor:
     
     def _get_level_description(self, level_type, value):
         """
-        Get descriptive text for level values based on the new metrics.
+        Get descriptive text for level values based on the rating scale.
         
         Args:
             level_type: Type of level ('water', 'silt', or 'debris')
-            value: Numeric level value
+            value: Integer level value (1-5)
             
         Returns:
             String description of the level
         """
-        # Updated descriptions based on new metrics
+        # Updated descriptions based on rating scale
         water_desc = {
             1: 'Dry',
             2: 'Low',
@@ -205,6 +284,7 @@ class CanalPredictor:
         }
         
         silt_desc = {
+            1: 'Cleaning',
             2: 'Light',
             3: 'Normal',
             4: 'Dirty',
@@ -212,6 +292,7 @@ class CanalPredictor:
         }
         
         debris_desc = {
+            1: 'Clearing',
             2: 'Light',
             3: 'Normal',
             4: 'Heavy',
@@ -251,6 +332,7 @@ class CanalPredictor:
         
         # Silt level colors: brown scale (light to heavily silted)
         silt_colors = {
+            1: (0.8, 0.8, 0.3),  # Yellow for cleaning
             2: (0.9, 0.8, 0.6),  # Light tan for light
             3: (0.8, 0.7, 0.5),  # Medium tan for normal
             4: (0.6, 0.5, 0.4),  # Dark tan for dirty
@@ -259,6 +341,7 @@ class CanalPredictor:
         
         # Debris level colors: green to red scale (light to blocked)
         debris_colors = {
+            1: (0.5, 0.9, 0.5),  # Green for clearing
             2: (0.7, 1.0, 0.7),  # Light green for light
             3: (1.0, 1.0, 0.5),  # Yellow for normal
             4: (1.0, 0.6, 0.4),  # Orange for heavy
@@ -275,7 +358,7 @@ class CanalPredictor:
 
     def visualize(self, result, save_path=None, enhance_water_line=True):
         """
-        Visualize segmentation results with simplified metrics display.
+        Visualize segmentation results with metrics display.
         
         Args:
             result: Dictionary containing segmentation results
@@ -345,20 +428,25 @@ class CanalPredictor:
         levels = result.get('levels', {})
         
         if levels:
-            # Create a simple table for metrics
+            # Get descriptions for each level
+            water_desc = self._get_level_description('water', levels.get('water_level', 3))
+            silt_desc = self._get_level_description('silt', levels.get('silt_level', 3))
+            debris_desc = self._get_level_description('debris', levels.get('debris_level', 3))
+            
+            # Create a simple table for metrics with descriptions
             metrics_data = [
-                ["Water Level", f"{levels.get('water_level', 0):.1f}/5", f"{levels.get('water_percentage', 0):.1f}%"],
-                ["Silt Level", f"{levels.get('silt_level', 0):.1f}/5", f"{levels.get('silt_percentage', 0):.1f}%"],
-                ["Debris Level", f"{levels.get('debris_level', 0):.1f}/5", f"{levels.get('debris_percentage', 0):.1f}%"]
+                ["Water Level", f"{levels.get('water_level', 3)}/5", f"{levels.get('water_percentage', 0):.1f}%", water_desc],
+                ["Silt Level", f"{levels.get('silt_level', 3)}/5", f"{levels.get('silt_percentage', 0):.1f}%", silt_desc],
+                ["Debris Level", f"{levels.get('debris_level', 3)}/5", f"{levels.get('debris_percentage', 0):.1f}%", debris_desc]
             ]
             
             # Create table
             table = ax_metrics.table(
                 cellText=metrics_data,
-                colLabels=["Metric", "Level", "Percentage"],
+                colLabels=["Metric", "Level", "Percentage", "Description"],
                 loc='center',
                 cellLoc='center',
-                colWidths=[0.3, 0.2, 0.2]
+                colWidths=[0.2, 0.15, 0.15, 0.3]
             )
             
             # Style the table
@@ -368,6 +456,33 @@ class CanalPredictor:
             
             # Add title
             ax_metrics.set_title('Canal Condition Metrics', fontsize=16, pad=20)
+            
+            # Add note about threshold
+            threshold_note = f"* Maximum level (5) threshold: {self.max_percentage}%"
+            plt.figtext(0.02, 0.12, threshold_note, fontsize=10, style='italic')
+            
+            # Get remarks
+            remark = self.descriptor.get_remark(
+                levels['water_level'],
+                levels['silt_level'],
+                levels['debris_level']
+            )
+            short_remark = self.descriptor.get_short_remark(
+                levels['water_level'],
+                levels['silt_level'],
+                levels['debris_level']
+            )
+            
+            # Add remarks to the visualization
+            plt.figtext(0.02, 0.02, remark, 
+                       bbox=dict(facecolor='white', alpha=0.8, 
+                               edgecolor='red' if "CRITICAL" in remark else 'black'))
+            
+            # Add short remark at the top
+            plt.figtext(0.5, 0.98, short_remark, 
+                       ha='center', va='top',
+                       bbox=dict(facecolor='yellow', alpha=0.5),
+                       fontsize=12, fontweight='bold')
         
         plt.tight_layout()
         
@@ -404,103 +519,19 @@ def batch_predict(predictor, image_dir, output_dir='results'):
         except Exception as e:
             print(f"Error processing {img_file}: {e}")
 
-def analyze_checkpoint(checkpoint_path):
-    """Analyze the checkpoint to understand its structure and parameters"""
-    try:
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        print("\nCheckpoint Analysis:")
-        print(f"Epochs trained: {checkpoint.get('epoch', 'N/A')}")
-        
-        if 'model_state_dict' in checkpoint:
-            model_dict = checkpoint['model_state_dict']
-            
-            # Look at output layer to determine number of classes
-            output_layer_keys = [k for k in model_dict.keys() if 'classifier.3.weight' in k]
-            if output_layer_keys:
-                out_layer = model_dict[output_layer_keys[0]]
-                num_classes = out_layer.shape[0]
-                print(f"Number of output classes in model: {num_classes}")
-                
-                # Print layer shapes for deeper analysis
-                for key in output_layer_keys:
-                    print(f"Output layer shape: {model_dict[key].shape}")
-            
-            # Print model structure summary
-            print(f"Total layers: {len(model_dict.keys())}")
-            print(f"First 5 keys: {list(model_dict.keys())[:5]}")
-            
-        if 'optimizer_state_dict' in checkpoint:
-            print("Optimizer state is present in the checkpoint")
-            
-        if 'best_metric' in checkpoint:
-            print(f"Best metric achieved: {checkpoint.get('best_metric')}")
-            
-    except Exception as e:
-        print(f"Error analyzing checkpoint: {e}")
-
-def inspect_model_architecture(checkpoint_path):
-    """Print detailed information about the model architecture from checkpoint"""
-    try:
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        if 'model_state_dict' in checkpoint:
-            model_dict = checkpoint['model_state_dict']
-            
-            print("\nDetailed Model Architecture Analysis:")
-            # Get all keys and organize them
-            all_keys = list(model_dict.keys())
-            
-            # Check for module prefix (DataParallel)
-            has_module_prefix = any(k.startswith('module.') for k in all_keys)
-            if has_module_prefix:
-                print("Model was trained with DataParallel (has 'module.' prefix)")
-            
-            # Group keys by major components
-            components = {}
-            for key in all_keys:
-                # Remove module prefix if exists
-                clean_key = key[7:] if has_module_prefix and key.startswith('module.') else key
-                
-                # Get first part of key (up to first dot)
-                parts = clean_key.split('.')
-                major_component = parts[0]
-                
-                if major_component not in components:
-                    components[major_component] = []
-                components[major_component].append(key)
-            
-            # Print component summary
-            print("\nModel Components:")
-            for comp_name, keys in components.items():
-                print(f"- {comp_name}: {len(keys)} parameters")
-            
-            # Print sample keys from each component
-            print("\nSample Keys from Each Component:")
-            for comp_name, keys in components.items():
-                print(f"\n{comp_name} (showing first 3):")
-                for k in keys[:3]:
-                    print(f"  {k}: {model_dict[k].shape}")
-                    
-    except Exception as e:
-        print(f"Error inspecting model architecture: {e}")
-
 if __name__ == '__main__':
+    # Default settings
     checkpoint_path = 'models/checkpoints_20250506_112241/best_model.pth'
+    max_percentage_threshold = 50 
     
-    # First analyze the checkpoint
-    print("Analyzing checkpoint...")
-    analyze_checkpoint(checkpoint_path)
-    
-    # Get more detailed information about the model architecture
-    print("\nInspecting model architecture...")
-    inspect_model_architecture(checkpoint_path)
-    
-    # Initialize predictor with checkpoint
+    # Create predictor with configurable threshold
     predictor = CanalPredictor(
-        checkpoint_path=checkpoint_path
+        checkpoint_path=checkpoint_path,
+        max_percentage=max_percentage_threshold
     )
     
     # Process a single image
-    image_path = 'data/raw/train/image5.jpg'  
+    image_path = 'data/raw/train/Canal-1.jpg'  
     result = predictor.predict(image_path)
     predictor.visualize(result)
     
