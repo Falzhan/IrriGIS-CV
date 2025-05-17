@@ -1,0 +1,274 @@
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QTabWidget, 
+                             QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+                             QFileDialog, QProgressBar, QSlider, QScrollArea,
+                             QGridLayout, QMessageBox, QSpinBox)
+from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtGui import QPixmap, QImage
+import sys
+import os
+import torch
+from pathlib import Path
+from datetime import datetime
+from models.detector import CanalMonitorNet
+from train import train
+from inference import CanalPredictor, batch_predict
+
+class TrainingWorker(QThread):
+    progress = Signal(str)
+    finished = Signal()
+    
+    def __init__(self, train_dir, annotation_file, save_dir):
+        super().__init__()
+        self.train_dir = train_dir
+        self.annotation_file = annotation_file
+        self.save_dir = save_dir
+        
+    def run(self):
+        try:
+            # Configure training parameters
+            config = {
+                'data': {
+                    'train_path': self.train_dir,
+                    'annotations_path': self.annotation_file
+                },
+                'model': {
+                    'num_classes': 10  # Including background
+                },
+                'training': {
+                    'epochs': 50,
+                    'batch_size': 4,
+                    'learning_rate': 0.001
+                }
+            }
+            
+            # Run training
+            train(config, self.save_dir)
+            self.finished.emit()
+            
+        except Exception as e:
+            self.progress.emit(f"Error during training: {str(e)}")
+
+class ResultWidget(QWidget):
+    def __init__(self, image_path, result, predictor):
+        super().__init__()
+        self.full_result = result
+        self.predictor = predictor
+        
+        layout = QVBoxLayout()
+        
+        # Display original image
+        pixmap = QPixmap(image_path)
+        image_label = QLabel()
+        image_label.setPixmap(pixmap.scaled(300, 300, Qt.KeepAspectRatio))
+        layout.addWidget(image_label)
+        
+        # Display ratings
+        levels = result['levels']
+        ratings = [
+            f"Water Level: {levels['water_level']}/5 - {predictor._get_level_description('water', levels['water_level'])}",
+            f"Silt Level: {levels['silt_level']}/5 - {predictor._get_level_description('silt', levels['silt_level'])}",
+            f"Debris Level: {levels['debris_level']}/5 - {predictor._get_level_description('debris', levels['debris_level'])}"
+        ]
+        
+        for rating in ratings:
+            label = QLabel(rating)
+            layout.addWidget(label)
+        
+        self.setLayout(layout)
+        
+        # Connect click event
+        self.mousePressEvent = self.show_full_details
+        
+    def show_full_details(self, event):
+        # Create new window with full visualization
+        self.predictor.visualize(self.full_result)
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Canal Monitor System")
+        self.setMinimumSize(800, 600)
+        
+        # Create tab widget
+        tabs = QTabWidget()
+        tabs.addTab(self.create_training_tab(), "Training")
+        tabs.addTab(self.create_inference_tab(), "Inference")
+        
+        self.setCentralWidget(tabs)
+    
+    def create_training_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Dataset selection
+        train_btn = QPushButton("Select Training Data Folder")
+        self.train_path_label = QLabel("No folder selected")
+        train_btn.clicked.connect(self.select_train_folder)
+        
+        anno_btn = QPushButton("Select Annotation File")
+        self.anno_path_label = QLabel("No file selected")
+        anno_btn.clicked.connect(self.select_annotation)
+        
+        save_btn = QPushButton("Select Save Location")
+        self.save_path_label = QLabel("No location selected")
+        save_btn.clicked.connect(self.select_save_location)
+        
+        # Training controls
+        self.train_btn = QPushButton("Start Training")
+        self.train_btn.clicked.connect(self.start_training)
+        self.train_btn.setEnabled(False)
+        
+        self.progress_label = QLabel("")
+        
+        # Add widgets to layout
+        layout.addWidget(train_btn)
+        layout.addWidget(self.train_path_label)
+        layout.addWidget(anno_btn)
+        layout.addWidget(self.anno_path_label)
+        layout.addWidget(save_btn)
+        layout.addWidget(self.save_path_label)
+        layout.addWidget(self.train_btn)
+        layout.addWidget(self.progress_label)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def create_inference_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout()
+        
+        # Model selection
+        model_btn = QPushButton("Select Model File (.pth)")
+        self.model_path_label = QLabel("No model selected")
+        model_btn.clicked.connect(self.select_model)
+        
+        # Threshold control
+        threshold_layout = QHBoxLayout()
+        threshold_layout.addWidget(QLabel("Max Percentage Threshold:"))
+        self.threshold_slider = QSpinBox()
+        self.threshold_slider.setRange(1, 100)
+        self.threshold_slider.setValue(50)
+        threshold_layout.addWidget(self.threshold_slider)
+        
+        # Image selection
+        image_btn = QPushButton("Select Images")
+        image_btn.clicked.connect(self.select_images)
+        
+        # Results area
+        self.results_area = QScrollArea()
+        self.results_widget = QWidget()
+        self.results_layout = QGridLayout()
+        self.results_widget.setLayout(self.results_layout)
+        self.results_area.setWidget(self.results_widget)
+        self.results_area.setWidgetResizable(True)
+        
+        # Add widgets to layout
+        layout.addWidget(model_btn)
+        layout.addWidget(self.model_path_label)
+        layout.addLayout(threshold_layout)
+        layout.addWidget(image_btn)
+        layout.addWidget(self.results_area)
+        
+        widget.setLayout(layout)
+        return widget
+    
+    def select_train_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Training Data Folder")
+        if folder:
+            self.train_path_label.setText(folder)
+            self.update_train_button()
+    
+    def select_annotation(self):
+        file, _ = QFileDialog.getOpenFileName(self, "Select Annotation File", "", "JSON Files (*.json)")
+        if file:
+            self.anno_path_label.setText(file)
+            self.update_train_button()
+    
+    def select_save_location(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Save Location")
+        if folder:
+            self.save_path_label.setText(folder)
+            self.update_train_button()
+    
+    def update_train_button(self):
+        self.train_btn.setEnabled(
+            self.train_path_label.text() != "No folder selected" and
+            self.anno_path_label.text() != "No file selected" and
+            self.save_path_label.text() != "No location selected"
+        )
+    
+    def start_training(self):
+        self.training_thread = TrainingWorker(
+            self.train_path_label.text(),
+            self.anno_path_label.text(),
+            self.save_path_label.text()
+        )
+        self.training_thread.progress.connect(self.update_progress)
+        self.training_thread.finished.connect(self.training_finished)
+        self.training_thread.start()
+        self.train_btn.setEnabled(False)
+    
+    def update_progress(self, message):
+        self.progress_label.setText(message)
+    
+    def training_finished(self):
+        self.progress_label.setText("Training completed!")
+        self.train_btn.setEnabled(True)
+    
+    def select_model(self):
+        file, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "PyTorch Models (*.pth)")
+        if file:
+            # Verify model compatibility
+            try:
+                checkpoint = torch.load(file, map_location='cpu')
+                num_classes = None
+                for key, value in checkpoint['model_state_dict'].items():
+                    if 'classifier.3.weight' in key:
+                        num_classes = value.shape[0]
+                        break
+                
+                if num_classes == 10:  # 9 classes + background
+                    self.model_path_label.setText(file)
+                else:
+                    QMessageBox.warning(self, "Incompatible Model",
+                                      f"Model has {num_classes} classes, expected 10")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Could not load model: {str(e)}")
+    
+    def select_images(self):
+        if self.model_path_label.text() == "No model selected":
+            QMessageBox.warning(self, "Error", "Please select a model first")
+            return
+        
+        # Allow selecting multiple images
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Select Images", "", "Images (*.png *.jpg *.jpeg)"
+        )
+        
+        if files:
+            # Clear previous results
+            for i in reversed(range(self.results_layout.count())): 
+                self.results_layout.itemAt(i).widget().setParent(None)
+            
+            # Initialize predictor
+            predictor = CanalPredictor(
+                self.model_path_label.text(),
+                max_percentage=self.threshold_slider.value()
+            )
+            
+            # Process each image
+            for i, file in enumerate(files):
+                try:
+                    result = predictor.predict(file)
+                    widget = ResultWidget(file, result, predictor)
+                    row = i // 3
+                    col = i % 3
+                    self.results_layout.addWidget(widget, row, col)
+                except Exception as e:
+                    QMessageBox.warning(self, "Error", f"Error processing {file}: {str(e)}")
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
