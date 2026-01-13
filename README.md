@@ -279,9 +279,8 @@ Contributions are welcome! Please follow these steps:
 
 For questions or support, please contact:
 
-- **Developer**: KiritoZhander45
-- **Email**: [your-email@example.com](mailto:your-email@example.com)
-- **GitHub Issues**: [https://github.com/your-username/IrriGIS-CanalMonitor/issues](https://github.com/your-username/IrriGIS-CanalMonitor/issues)
+- **Developer**: Falzhan
+- **Email**: [montefalconzhander@gmail.com](mailto:montefalconzhander@gmail.com)
 
 ## References
 
