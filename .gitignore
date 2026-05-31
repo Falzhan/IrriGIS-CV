@@ -4,3 +4,23 @@ models/*
 !models/*.py
 
 venv/
+
+# Build artifacts
+build/
+dist/
+
+# Large files
+*.exe
+*.pkg
+*.zip
+*.tar.gz
+*.7z
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS junk
+Thumbs.db
+.DS_Store

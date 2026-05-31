@@ -65,6 +65,34 @@ pip install -r requirements.txt
 python mainUI.py
 ```
 
+### Setting Up from Archive (No venv)
+
+If restoring from an archive where `venv/` was deleted:
+
+1. **Ensure Python 3.8+ is installed**:
+   ```bash
+   python --version
+   ```
+
+2. **Create a new virtual environment**:
+   ```bash
+   python -m venv venv
+   ```
+
+3. **Activate it**:
+   - Windows: `venv\Scripts\activate`
+   - macOS/Linux: `source venv/bin/activate`
+
+4. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+5. **Launch the application**:
+   ```bash
+   python mainUI.py
+   ```
+
 ## 📦 Project Structure
 
 ```
